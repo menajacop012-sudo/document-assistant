@@ -1,0 +1,25 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets (never upload keys or passwords)
+.env
+*.key
+
+# Local vector database (if you make ChromaDB persistent later)
+chroma_db/
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Archives and local test files
+*.rar
+*.zip

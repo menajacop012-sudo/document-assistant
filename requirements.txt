@@ -1,0 +1,7 @@
+flask
+gunicorn
+pypdf
+python-docx
+sentence-transformers
+chromadb
+ollama

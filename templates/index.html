@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Document Assistant</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="rail">
+        <h1>Document Assistant</h1>
+        <p class="lede">
+          Ask a question or request a summary of any section. Answers show their
+          source pages.
+        </p>
+
+        <form id="upload-form" class="upload">
+          <label for="file" class="drop">
+            <span id="file-label">Choose a PDF, Word or text file</span>
+            <input type="file" id="file" accept=".pdf,.docx,.txt" required />
+          </label>
+          <button type="submit" id="upload-btn">Index document</button>
+        </form>
+        <p id="status" class="status" role="status"></p>
+      </aside>
+
+      <main class="desk">
+        <div id="thread" class="thread" aria-live="polite">
+          <p id="empty" class="empty">
+            Upload a document to start asking questions.
+          </p>
+        </div>
+
+        <form id="ask-form" class="ask">
+          <input
+            type="text"
+            id="question"
+            placeholder="Ask about the document"
+            autocomplete="off"
+            disabled
+            required
+          />
+          <button type="submit" id="ask-btn" disabled>Ask</button>
+        </form>
+      </main>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const fileInput = $("file");
+      const statusEl = $("status");
+      const thread = $("thread");
+      const questionEl = $("question");
+      const askBtn = $("ask-btn");
+
+      function setStatus(message, isError = false) {
+        statusEl.textContent = message;
+        statusEl.classList.toggle("error", isError);
+      }
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        $("file-label").textContent = file
+          ? file.name
+          : "Choose a PDF, Word or text file";
+      });
+
+      // Upload and index the document
+      $("upload-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const btn = $("upload-btn");
+        btn.disabled = true;
+        setStatus("Indexing. This can take a moment.");
+
+        const body = new FormData();
+        body.append("file", file);
+
+        try {
+          const res = await fetch("/upload", { method: "POST", body });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Upload failed.");
+
+          setStatus(
+            `${data.filename} is ready (${data.chunks} passages , ${data.pages} pages).`,
+          );
+          thread.innerHTML =
+            '<p id="empty" class="empty">Ready. Ask a question about ' +
+            "<strong></strong>.</p>";
+          thread.querySelector("strong").textContent = data.filename;
+          questionEl.disabled = false;
+          askBtn.disabled = false;
+          questionEl.focus();
+        } catch (err) {
+          setStatus(err.message, true);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      // Ask a question
+      $("ask-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const question = questionEl.value.trim();
+        if (!question) return;
+
+        const empty = $("empty");
+        if (empty) empty.remove();
+
+        const exchange = document.createElement("article");
+        exchange.className = "exchange";
+
+        const q = document.createElement("p");
+        q.className = "q";
+        q.textContent = question;
+
+        const a = document.createElement("p");
+        a.className = "a pending";
+        a.textContent = "Reading the document...";
+
+        const sources = document.createElement("div");
+        sources.className = "sources";
+
+        exchange.append(q, a, sources);
+        thread.append(exchange);
+        thread.scrollTop = thread.scrollHeight;
+
+        questionEl.value = "";
+        questionEl.disabled = true;
+        askBtn.disabled = true;
+
+        try {
+          const res = await fetch("/ask", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Something went wrong.");
+
+          a.textContent = data.answer;
+          data.pages.forEach((page) => {
+            const chip = document.createElement("span");
+            chip.textContent = "p. " + page;
+            sources.append(chip);
+          });
+        } catch (err) {
+          a.textContent = err.message;
+          a.classList.add("error");
+        } finally {
+          a.classList.remove("pending");
+          questionEl.disabled = false;
+          askBtn.disabled = false;
+          questionEl.focus();
+          thread.scrollTop = thread.scrollHeight;
+        }
+      });
+    </script>
+  </body>
+</html>
